@@ -5,7 +5,7 @@ import { exportTemplaterTemplate } from "./dreamCreator";
 import { ConfirmResetModal, resetAllDreamData } from "./resetManager";
 import { getOpenAiApiKey } from "./api";
 import { FolderSuggest, FileSuggest } from "./suggest";
-import { t } from "./i18n";
+import { setLocalePreference, t } from "./i18n";
 
 export class DreamAnalyzerSettingTab extends PluginSettingTab {
 	plugin: DreamAnalyzerPlugin;
@@ -15,10 +15,6 @@ export class DreamAnalyzerSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-	getSettingDefinitions(): unknown[] {
-		return [];
-	}
-
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -26,6 +22,25 @@ export class DreamAnalyzerSettingTab extends PluginSettingTab {
 		// Title
 		const titleSetting = new Setting(containerEl).setName(t("settingsTitle"));
 		titleSetting.settingEl.addClass("setting-item-heading");
+
+		new Setting(containerEl)
+			.setName(t("languageName"))
+			.setDesc(t("languageDesc"))
+			.addDropdown(dropdown => dropdown
+				.addOption("auto", t("languageAuto"))
+				.addOption("ru", t("languageRussian"))
+				.addOption("uk", t("languageUkrainian"))
+				.addOption("en", t("languageEnglish"))
+				.setValue(this.plugin.settings.language || "auto")
+				.onChange(async (value: string) => {
+					if (!(["auto", "ru", "uk", "en"] as string[]).includes(value)) return;
+					const language = value as "auto" | "ru" | "uk" | "en";
+					this.plugin.settings.language = language;
+					setLocalePreference(language);
+					await this.plugin.saveSettings();
+					new Notice(t("languageChanged"));
+					this.display();
+				}));
 
 		// 1. OpenAI API Key Setting (Stacked Layout)
 		const apiKeySetting = new Setting(containerEl)

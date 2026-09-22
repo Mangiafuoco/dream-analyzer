@@ -6,10 +6,10 @@ import { createTodayDreamNote, createDreamNoteForDate, DatePickerModal } from ".
 import { updateEntityEmbeddings, clearMemoryCache, getDreamsSubfolder } from "./embeddings";
 import { ConfirmResetModal, resetAllDreamData } from "./resetManager";
 import { getOpenAiApiKey } from "./api";
-import { t } from "./i18n";
+import { setLocalePreference, t } from "./i18n";
 
 export default class DreamAnalyzerPlugin extends Plugin {
-	settings: DreamAnalyzerSettings;
+	settings!: DreamAnalyzerSettings;
 
 	async onload() {
 		await this.loadSettings();
@@ -67,7 +67,7 @@ export default class DreamAnalyzerPlugin extends Plugin {
 		// Command 3: Create dream note for custom selected date
 		this.addCommand({
 			id: "create-custom-date-dream-note",
-			name: t("cmdCreateDreamDate"),
+			name: t("cmdCreateCustomDateDream"),
 			callback: () => {
 				new DatePickerModal(this.app, (selectedDate: string) => {
 					void createDreamNoteForDate(this.app, this.settings, selectedDate);
@@ -83,12 +83,12 @@ export default class DreamAnalyzerPlugin extends Plugin {
 				void (async () => {
 					try {
 						const apiKey = await getOpenAiApiKey(this.app, this.settings);
-						new Notice("Розпочато пакетне оновлення ембедінгів...");
+						new Notice(t("rebuildStarted"));
 						const count = await updateEntityEmbeddings(this.app, apiKey, this.settings, true);
-						new Notice(`Оновлено ембедінгів для ${count} сутностей!`);
+						new Notice(t("rebuildSuccess", { count }));
 					} catch (error: unknown) {
 						const msg = error instanceof Error ? error.message : String(error);
-						new Notice("Помилка оновлення ембедінгів: " + msg);
+						new Notice(t("rebuildError", { msg }));
 					}
 				})();
 			}
@@ -97,7 +97,7 @@ export default class DreamAnalyzerPlugin extends Plugin {
 		// Command 5: Clear all entities and analysis data
 		this.addCommand({
 			id: "reset-all-dream-data",
-			name: t("cmdResetData"),
+			name: t("cmdResetAllData"),
 			callback: () => {
 				new ConfirmResetModal(this.app, () => {
 					void resetAllDreamData(this.app, this.settings);
@@ -116,6 +116,7 @@ export default class DreamAnalyzerPlugin extends Plugin {
 	async loadSettings() {
 		const loadedData = (await this.loadData()) as Partial<DreamAnalyzerSettings> | null;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+		setLocalePreference(this.settings.language);
 	}
 
 	async saveSettings() {

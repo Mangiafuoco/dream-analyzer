@@ -1,12 +1,13 @@
 import { App, TFile, TFolder, Vault, normalizePath } from "obsidian";
 import {
 	DreamAnalyzerSettings,
+	EntityCategory,
 	VectorDatabaseItem,
 	DreamVectorDatabaseItem,
 	DreamConnectionResult,
 	ENTITY_TYPES
 } from "./types";
-import { getLocale, t } from "./i18n";
+import { getAllLocaleStructures, getLocaleStructure, t } from "./i18n";
 
 const VECTOR_DB_FILENAME = "entity_embeddings.json";
 const DREAM_VECTOR_DB_FILENAME = "dream_embeddings.json";
@@ -36,29 +37,48 @@ export function getFolderMarkdownFiles(app: App, folderPath: string): TFile[] {
 export function getDreamsSubfolder(app: App, settings?: Partial<DreamAnalyzerSettings>): string {
 	const rawFolder = (settings && typeof settings.dreamsFolder === "string") ? settings.dreamsFolder : "Dreams";
 	const dreamsBase = rawFolder.trim().replace(/\/$/, "") || "Dreams";
-
-	if (app && app.vault) {
-		if (app.vault.getAbstractFileByPath(`${dreamsBase}/Сни`)) return `${dreamsBase}/Сни`;
-		if (app.vault.getAbstractFileByPath(`${dreamsBase}/Dreams`)) return `${dreamsBase}/Dreams`;
-	}
-
-	const lang = getLocale();
-	const subfolder = lang === "uk" ? "Сни" : "Dreams";
-	return `${dreamsBase}/${subfolder}`;
+	return resolveLocalizedSubfolder(app, dreamsBase, structure => structure.dreamsSubfolder);
 }
 
 export function getEntitiesSubfolder(app: App, settings?: Partial<DreamAnalyzerSettings>): string {
 	const rawFolder = (settings && typeof settings.dreamsFolder === "string") ? settings.dreamsFolder : "Dreams";
 	const dreamsBase = rawFolder.trim().replace(/\/$/, "") || "Dreams";
+	return resolveLocalizedSubfolder(app, dreamsBase, structure => structure.entitiesSubfolder);
+}
 
-	if (app && app.vault) {
-		if (app.vault.getAbstractFileByPath(`${dreamsBase}/Сутності`)) return `${dreamsBase}/Сутності`;
-		if (app.vault.getAbstractFileByPath(`${dreamsBase}/Entities`)) return `${dreamsBase}/Entities`;
+export function getIndexSubfolder(app: App, settings?: Partial<DreamAnalyzerSettings>): string {
+	const rawFolder = (settings && typeof settings.dreamsFolder === "string") ? settings.dreamsFolder : "Dreams";
+	const dreamsBase = rawFolder.trim().replace(/\/$/, "") || "Dreams";
+	return resolveLocalizedSubfolder(app, dreamsBase, structure => structure.indexSubfolder);
+}
+
+export function getEntityCategorySubfolder(
+	app: App,
+	baseEntitiesFolder: string,
+	category: EntityCategory
+): string {
+	return resolveLocalizedSubfolder(app, baseEntitiesFolder, structure => structure.entityFolders[category]);
+}
+
+function resolveLocalizedSubfolder(
+	app: App,
+	baseFolder: string,
+	selectName: (structure: ReturnType<typeof getLocaleStructure>) => string
+): string {
+	const preferredName = selectName(getLocaleStructure());
+	const candidateNames = Array.from(new Set([
+		preferredName,
+		...getAllLocaleStructures().map(selectName)
+	]));
+
+	if (app?.vault) {
+		for (const candidate of candidateNames) {
+			const path = `${baseFolder}/${candidate}`;
+			if (app.vault.getAbstractFileByPath(path)) return path;
+		}
 	}
 
-	const lang = getLocale();
-	const subfolder = lang === "uk" ? "Сутності" : "Entities";
-	return `${dreamsBase}/${subfolder}`;
+	return `${baseFolder}/${preferredName}`;
 }
 
 function getDreamsBase(settings?: Partial<DreamAnalyzerSettings>): string {
@@ -517,11 +537,8 @@ export async function analyzeDreamConnections(
 }
 
 export function formatDreamConnectionsMarkdown(connections: DreamConnectionResult[]): string {
-	const lang = getLocale();
-	const noResultsStr = lang === "uk" ? "_Поки що не знайдено схожих попередніх снів._" : "_No similar previous dreams found yet._";
-	
 	if (connections.length === 0) {
-		return noResultsStr;
+		return t("noSimilarDreams");
 	}
 
 	const connSignsLabel = t("connDreamSigns");

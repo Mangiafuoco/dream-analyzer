@@ -15,9 +15,10 @@ import {
 	analyzeDreamConnections,
 	formatDreamConnectionsMarkdown,
 	getDreamsSubfolder,
-	getEntitiesSubfolder
+	getEntitiesSubfolder,
+	getEntityCategorySubfolder
 } from "./embeddings";
-import { getLocale, t } from "./i18n";
+import { t } from "./i18n";
 
 interface TypedMoment {
 	format(fmt: string): string;
@@ -30,7 +31,8 @@ function getMoment(): TypedMoment {
 
 const STOP_ENTITIES_LOWER = new Set([
 	// Ukrainian & Russian
-	"оповідач", "я", "сновидець", "моє тіло", "власне тіло", "себе", "автор", "моя особа", "самість", "рассказчик", "мое тело",
+	"оповідач", "я", "сновидець", "моє тіло", "власне тіло", "себе", "автор", "моя особа", "самість",
+	"рассказчик", "сновидец", "моё тело", "мое тело", "собственное тело", "моя личность", "самость",
 	// English
 	"narrator", "i", "me", "myself", "dreamer", "my body", "self", "own body"
 ]);
@@ -103,15 +105,9 @@ export function extractDreamTextOnly(fullFileContent: string): string {
 		}
 	}
 
-	// Cut off previous AI analysis section in Ukrainian or English
-	const aiSectionIdxUk = body.indexOf("# AI аналіз");
-	if (aiSectionIdxUk !== -1) {
-		body = body.slice(0, aiSectionIdxUk);
-	}
-	const aiSectionIdxEn = body.indexOf("# AI Analysis");
-	if (aiSectionIdxEn !== -1) {
-		body = body.slice(0, aiSectionIdxEn);
-	}
+	// Cut off previous AI analysis section in any supported language.
+	const aiSectionMatch = body.match(/^#\s*AI\s+(?:анализ|аналіз|Analysis)\s*$/im);
+	if (aiSectionMatch?.index !== undefined) body = body.slice(0, aiSectionMatch.index);
 
 	// Remove standard headers like "# Сон" or "# Dream"
 	body = body.replace(/^#\s*Сон\s*$/gm, "");
@@ -119,6 +115,7 @@ export function extractDreamTextOnly(fullFileContent: string): string {
 
 	// Clean up placeholder text if user forgot to remove it
 	body = body.replace(/>\s*Введіть сюди свій текст сну\.\.\./gi, "");
+	body = body.replace(/>\s*Введите сюда текст сна\.\.\./gi, "");
 	body = body.replace(/>\s*Enter your dream text here\.\.\./gi, "");
 
 	// Strip blockquote markers '>' so OpenAI receives clean prose
@@ -170,13 +167,13 @@ ${entityContext}
 Use existing entities if they fit. Do not create a new entity if an identical or very close entity already exists.
 
 CRITICAL LANGUAGE REQUIREMENT:
-- Automatically detect the language of the provided dream text (e.g., Ukrainian, English, etc.).
+- Automatically detect the language of the provided dream text (e.g., Russian, Ukrainian, English, etc.).
 - ALL returned text fields ("summary", "name", "description", "aliases", "keywords") MUST be in the EXACT SAME LANGUAGE as the dream text.
 - Do NOT translate the dream content, entity names, descriptions, or keywords into another language.
 
 STOP ENTITIES & DEDUPLICATION RULES:
-- Do NOT create trivial self-referential entities representing the dreamer or narrator (e.g., "Narrator", "Dreamer", "I", "Me", "My body", "Myself", "Оповідач", "Я", "Сновидець", "Моє тіло", "Власне тіло", "Себе").
-- If the dreamer's identity, body transformation, or state of self is an important plot point, record this via appropriate "concepts" (e.g., "Body Transformation", "Identity Change", "Трансформація тіла", "Зміна особистості"), NOT via a "Narrator" character entity.
+- Do NOT create trivial self-referential entities representing the dreamer or narrator (e.g., "Narrator", "Dreamer", "I", "Me", "My body", "Myself", "Рассказчик", "Я", "Сновидец", "Моё тело", "Оповідач", "Сновидець", "Моє тіло", "Себе").
+- If the dreamer's identity, body transformation, or state of self is an important plot point, record this via appropriate "concepts" (e.g., "Body Transformation", "Identity Change", "Трансформация тела", "Изменение личности", "Трансформація тіла", "Зміна особистості"), NOT via a "Narrator" character entity.
 - Each entity must have a SINGLE unique name across all categories. Do NOT return duplicate entity names in different categories (e.g. if an item is an Object "Ladder", do NOT also create a Symbol "Ladder").
 
 Return JSON ONLY.
@@ -285,28 +282,22 @@ A short summary of the dream in 2-5 sentences in the dream's language.
 		});
 
 		// 2. У тілі нотатки сну залишаємо ТІЛЬКИ унікальну інформацію сну (Короткий опис та Зв'язки)
-		const lang = getLocale();
-		const aiSectionHeader = lang === "uk" ? "# AI аналіз" : "# AI Analysis";
-		const summarySectionHeader = lang === "uk" ? "## Короткий опис" : "## Summary";
-		const connectionsSectionHeader = lang === "uk" ? "## Можливі зв'язки з попередніми снами" : "## Possible Connections";
-
 		const aiText = `
-${aiSectionHeader}
+${t("aiHeader")}
 
-${summarySectionHeader}
+${t("summaryHeader")}
 
 ${result.summary || "-"}
 
-${connectionsSectionHeader}
+${t("connectionsHeader")}
 
 ${connectionsMarkdown}
 `;
 
 		let updatedContent = await app.vault.read(file);
-		if (updatedContent.includes("# AI аналіз")) {
-			updatedContent = updatedContent.replace(/# AI аналіз[\s\S]*/, aiText.trim());
-		} else if (updatedContent.includes("# AI Analysis")) {
-			updatedContent = updatedContent.replace(/# AI Analysis[\s\S]*/, aiText.trim());
+		const existingAiSection = updatedContent.match(/^#\s*AI\s+(?:анализ|аналіз|Analysis)\s*$/im);
+		if (existingAiSection?.index !== undefined) {
+			updatedContent = `${updatedContent.slice(0, existingAiSection.index).trimEnd()}\n\n${aiText.trim()}`;
 		} else {
 			updatedContent += `\n\n${aiText.trim()}`;
 		}
@@ -390,41 +381,21 @@ async function createOrUpdateEntities(
 ): Promise<string[]> {
 	const modifiedPaths: string[] = [];
 	const baseEntitiesFolder = getEntitiesSubfolder(app, settings);
-	const lang = getLocale();
-
-	const enFolderNames: Record<string, string> = {
-		"Персонажі": "Characters",
-		"Місця": "Places",
-		"Предмети": "Objects",
-		"Емоції": "Emotions",
-		"Символи": "Symbols",
-		"Концепти": "Concepts"
-	};
 
 	for (const typeInfo of ENTITY_TYPES) {
 		const items = result[typeInfo.field];
 		if (!items || items.length === 0) continue;
 
-		let folderSubName = typeInfo.folder;
-		if (lang === "en") {
-			const altName = enFolderNames[typeInfo.folder] || typeInfo.folder;
-			if (app.vault.getAbstractFileByPath(`${baseEntitiesFolder}/${typeInfo.folder}`)) {
-				folderSubName = typeInfo.folder;
-			} else {
-				folderSubName = altName;
-			}
-		}
-
-		const targetFolder = `${baseEntitiesFolder}/${folderSubName}`;
+		const targetFolder = getEntityCategorySubfolder(app, baseEntitiesFolder, typeInfo.field);
 		await ensureFolder(app, targetFolder);
 
-		const descHeader = lang === "uk" ? "## Опис та сюжетний контекст" : "## Description & Story Context";
-		const relHeader = lang === "uk" ? "## Пов'язані сни" : "## Related Dreams";
-		const emptyDesc = lang === "uk" ? "Опис буде додано після нових снів." : "Description will be updated after new dreams.";
-		const dateCol = lang === "uk" ? "Дата" : "Date";
-		const typeCol = lang === "uk" ? "Тип" : "Type";
-		const lucidOpt = lang === "uk" ? "ОС" : "Lucid";
-		const regOpt = lang === "uk" ? "Ззвичайний" : "Regular";
+		const descHeader = t("entityDescriptionHeader");
+		const relHeader = t("entityRelatedHeader");
+		const emptyDesc = t("entityEmptyDescription");
+		const dateCol = t("colDate");
+		const typeCol = t("colType");
+		const lucidOpt = t("lucidOption");
+		const regOpt = t("regularOption");
 
 		for (const item of items) {
 			if (isStopEntity(item.name)) continue;

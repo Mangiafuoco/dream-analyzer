@@ -97,11 +97,9 @@ export async function resetAllDreamData(
 			});
 
 			let content = await app.vault.read(file);
-			if (content.includes("# AI аналіз")) {
-				content = content.replace(/# AI аналіз[\s\S]*/, "");
-				await app.vault.modify(file, content.trim());
-			} else if (content.includes("# AI Analysis")) {
-				content = content.replace(/# AI Analysis[\s\S]*/, "");
+			const aiSection = content.match(/^#\s*AI\s+(?:анализ|аналіз|Analysis)\s*$/im);
+			if (aiSection?.index !== undefined) {
+				content = content.slice(0, aiSection.index);
 				await app.vault.modify(file, content.trim());
 			}
 			dreamsReset++;

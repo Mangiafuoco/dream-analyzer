@@ -1,7 +1,12 @@
 import { App, TFile, Notice, Modal, Setting, moment } from "obsidian";
 import { DreamAnalyzerSettings, ENTITY_TYPES } from "./types";
-import { t, tList, getLocale } from "./i18n";
-import { getDreamsSubfolder, getEntitiesSubfolder } from "./embeddings";
+import { t, tList } from "./i18n";
+import {
+	getDreamsSubfolder,
+	getEntitiesSubfolder,
+	getEntityCategorySubfolder,
+	getIndexSubfolder
+} from "./embeddings";
 
 interface TypedMoment {
 	format(fmt: string): string;
@@ -69,7 +74,7 @@ export async function createDreamNoteForDate(
 ): Promise<TFile | void> {
 	const now = targetDateInput ? getMoment(targetDateInput, ["YYYY-MM-DD", "D.MM.YYYY", "DD.MM.YYYY"]) : getMoment();
 	if (!now.isValid()) {
-		new Notice("Некоректний формат дати");
+		new Notice(t("invalidDate"));
 		return;
 	}
 
@@ -100,13 +105,6 @@ export async function createDreamNoteForDate(
 		return existingFile;
 	}
 
-	const lang = getLocale();
-	const dreamHeader = lang === "uk" ? "# Сон" : "# Dream";
-	const placeholder = lang === "uk" ? "> Введіть сюди свій текст сну..." : "> Enter your dream text here...";
-	const aiHeader = lang === "uk" ? "# AI аналіз" : "# AI Analysis";
-	const summaryHeader = lang === "uk" ? "## Короткий опис" : "## Summary";
-	const connectionsHeader = lang === "uk" ? "## Можливі зв'язки з попередніми снами" : "## Possible Connections";
-
 	const templateContent = `---
 type: dream
 date: ${dateStr}
@@ -121,17 +119,17 @@ concepts: []
 keywords: []
 ---
 
-${dreamHeader}
+${t("dreamHeader")}
 
-${placeholder}
+${t("dreamPlaceholder")}
 
-${aiHeader}
+${t("aiHeader")}
 
-${summaryHeader}
+${t("summaryHeader")}
 
 -
 
-${connectionsHeader}
+${t("connectionsHeader")}
 
 -
 `;
@@ -173,9 +171,9 @@ ${t("dashboardSectionStats")}
 
 \`\`\`dataview
 TABLE WITHOUT ID
-length(rows) AS "Всього снів",
-length(filter(rows, (r) => r.lucid)) AS "Усвідомлених (ОС)",
-round(length(filter(rows, (r) => r.lucid)) / length(rows) * 100, 1) + "%" AS "% ОС"
+length(rows) AS "${t("dashboardTotalDreams")}",
+length(filter(rows, (r) => r.lucid)) AS "${t("dashboardLucidDreams")}",
+round(length(filter(rows, (r) => r.lucid)) / length(rows) * 100, 1) + "%" AS "${t("dashboardLucidPercent")}"
 FROM "${dreamsSubfolder}"
 WHERE type = "dream"
 GROUP BY type
@@ -185,10 +183,10 @@ ${t("dashboardSectionSigns")}
 
 \`\`\`dataview
 TABLE WITHOUT ID
-file.link AS "Тригер / Поняття",
-entity_type AS "Категорія",
-dream_count AS "Частота у снах",
-last_seen AS "Остання поява"
+file.link AS "${t("dashboardTrigger")}",
+entity_type AS "${t("dashboardCategory")}",
+dream_count AS "${t("dashboardFrequency")}",
+last_seen AS "${t("dashboardLastSeen")}"
 FROM "${entitiesSubfolder}"
 WHERE type = "entity" AND contains(list("character", "place", "symbol", "object"), entity_type)
 SORT dream_count DESC
@@ -199,9 +197,9 @@ ${t("dashboardSectionEmotions")}
 
 \`\`\`dataview
 TABLE WITHOUT ID
-file.link AS "Емоція / Стан",
-dream_count AS "Появ у снах",
-last_seen AS "Останній сон"
+file.link AS "${t("dashboardEmotion")}",
+dream_count AS "${t("dashboardAppearances")}",
+last_seen AS "${t("dashboardLastDream")}"
 FROM "${entitiesSubfolder}"
 WHERE entity_type = "emotion"
 SORT dream_count DESC
@@ -212,10 +210,10 @@ ${t("dashboardSectionCreative")}
 
 \`\`\`dataview
 TABLE WITHOUT ID
-file.link AS "Ідея / Концепт",
-entity_type AS "Тип",
-description AS "Опис та сюжетний потенціал",
-dream_count AS "Згадок у снах"
+file.link AS "${t("dashboardIdea")}",
+entity_type AS "${t("dashboardType")}",
+description AS "${t("dashboardDescription")}",
+dream_count AS "${t("dashboardMentions")}"
 FROM "${entitiesSubfolder}"
 WHERE type = "entity" AND contains(list("concept", "character", "place"), entity_type) AND length(description) > 0
 SORT dream_count DESC
@@ -226,8 +224,8 @@ ${t("dashboardSectionLucid")}
 
 \`\`\`dataview
 TABLE WITHOUT ID
-file.link AS "Сон",
-date AS "Дата"
+file.link AS "${t("dashboardDream")}",
+date AS "${t("dashboardDate")}"
 FROM "${dreamsSubfolder}"
 WHERE type = "dream" AND lucid = true
 SORT date DESC
@@ -237,12 +235,12 @@ ${t("dashboardSectionRecent")}
 
 \`\`\`dataview
 TABLE WITHOUT ID
-file.link AS "Сон",
-date AS "Дата",
-choice(lucid, "ОС", "Звичайний") AS "Тип",
-characters AS "Персонажі",
-places AS "Локації",
-concepts AS "Концепти"
+file.link AS "${t("dashboardDream")}",
+date AS "${t("dashboardDate")}",
+choice(lucid, "${t("lucidOption")}", "${t("dashboardNormal")}") AS "${t("dashboardType")}",
+characters AS "${t("dashboardCharacters")}",
+places AS "${t("dashboardPlaces")}",
+concepts AS "${t("dashboardConcepts")}"
 FROM "${dreamsSubfolder}"
 WHERE type = "dream"
 SORT date DESC
@@ -258,10 +256,7 @@ LIMIT 10
 }
 
 export async function ensureEntityIndexes(app: App, settings: DreamAnalyzerSettings): Promise<void> {
-	const dreamsBase = settings.dreamsFolder.trim().replace(/\/$/, "") || "Dreams";
-	const lang = getLocale();
-	const indexFolderSubname = lang === "uk" ? "Індекс" : "Index";
-	const indexFolderPath = `${dreamsBase}/${indexFolderSubname}`;
+	const indexFolderPath = getIndexSubfolder(app, settings);
 
 	await ensureFolder(app, indexFolderPath);
 
@@ -269,7 +264,7 @@ export async function ensureEntityIndexes(app: App, settings: DreamAnalyzerSetti
 
 	// Clean up old "! Індекс.md" files if created inside category folders by previous versions using trashFile
 	for (const type of ENTITY_TYPES) {
-		const categoryFolder = `${baseEntitiesFolder}/${type.folder}`;
+		const categoryFolder = getEntityCategorySubfolder(app, baseEntitiesFolder, type.field);
 		const oldPath = `${categoryFolder}/! Індекс.md`;
 		const oldFile = app.vault.getAbstractFileByPath(oldPath);
 		if (oldFile instanceof TFile) {
@@ -277,31 +272,25 @@ export async function ensureEntityIndexes(app: App, settings: DreamAnalyzerSetti
 		}
 	}
 
-	const indexFilesInfo = lang === "uk" ? [
-		{ name: "Індекс персонажів.md", header: "# Персонажі", folder: "Персонажі" },
-		{ name: "Індекс місць.md", header: "# Місця", folder: "Місця" },
-		{ name: "Індекс предметів.md", header: "# Предмети", folder: "Предмети" },
-		{ name: "Індекс емоцій.md", header: "# Емоції", folder: "Емоції" },
-		{ name: "Індекс символів.md", header: "# Символи", folder: "Символи" },
-		{ name: "Індекс концептів.md", header: "# Концепти", folder: "Концепти" },
-		{ name: "Всі сутності.md", header: "# Всі сутності", folder: "" }
-	] : [
-		{ name: "Character Index.md", header: "# Characters", folder: "Characters" },
-		{ name: "Place Index.md", header: "# Places", folder: "Places" },
-		{ name: "Object Index.md", header: "# Objects", folder: "Objects" },
-		{ name: "Emotion Index.md", header: "# Emotions", folder: "Emotions" },
-		{ name: "Symbol Index.md", header: "# Symbols", folder: "Symbols" },
-		{ name: "Concept Index.md", header: "# Concepts", folder: "Concepts" },
-		{ name: "All Entities.md", header: "# All Entities", folder: "" }
+	const indexFilesInfo = [
+		{ name: t("indexCharactersFile"), header: t("indexCharactersHeader"), category: "characters" as const },
+		{ name: t("indexPlacesFile"), header: t("indexPlacesHeader"), category: "places" as const },
+		{ name: t("indexObjectsFile"), header: t("indexObjectsHeader"), category: "objects" as const },
+		{ name: t("indexEmotionsFile"), header: t("indexEmotionsHeader"), category: "emotions" as const },
+		{ name: t("indexSymbolsFile"), header: t("indexSymbolsHeader"), category: "symbols" as const },
+		{ name: t("indexConceptsFile"), header: t("indexConceptsHeader"), category: "concepts" as const },
+		{ name: t("indexAllFile"), header: t("indexAllHeader"), category: null }
 	];
 
-	const typeCol = lang === "uk" ? "Тип" : "Type";
-	const dreamsCol = lang === "uk" ? "Снів" : "Dreams";
-	const lastSeenCol = lang === "uk" ? "Остання поява" : "Last Seen";
+	const typeCol = t("colType");
+	const dreamsCol = t("colDreams");
+	const lastSeenCol = t("colLastSeen");
 
 	for (const info of indexFilesInfo) {
 		const filePath = `${indexFolderPath}/${info.name}`;
-		const targetFromFolder = info.folder ? `${baseEntitiesFolder}/${info.folder}` : baseEntitiesFolder;
+		const targetFromFolder = info.category
+			? getEntityCategorySubfolder(app, baseEntitiesFolder, info.category)
+			: baseEntitiesFolder;
 
 		const indexContent = `${info.header}
 
@@ -333,13 +322,6 @@ export async function exportTemplaterTemplate(app: App, settings: DreamAnalyzerS
 		await ensureFolder(app, parentFolder);
 	}
 
-	const lang = getLocale();
-	const dreamHeader = lang === "uk" ? "# Сон" : "# Dream";
-	const placeholder = lang === "uk" ? "> Введіть сюди свій текст сну..." : "> Enter your dream text here...";
-	const aiHeader = lang === "uk" ? "# AI аналіз" : "# AI Analysis";
-	const summaryHeader = lang === "uk" ? "## Короткий опис" : "## Summary";
-	const connectionsHeader = lang === "uk" ? "## Можливі зв'язки з попередніми снами" : "## Possible Connections";
-
 	const content = `---
 type: dream
 date: <% tp.file.creation_date("YYYY-MM-DD") %>
@@ -354,17 +336,17 @@ concepts: []
 keywords: []
 ---
 
-${dreamHeader}
+${t("dreamHeader")}
 
-${placeholder}
+${t("dreamPlaceholder")}
 
-${aiHeader}
+${t("aiHeader")}
 
-${summaryHeader}
+${t("summaryHeader")}
 
 -
 
-${connectionsHeader}
+${t("connectionsHeader")}
 
 -
 `;

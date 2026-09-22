@@ -54,6 +54,7 @@ export interface DreamConnectionResult {
 }
 
 export interface DreamAnalyzerSettings {
+	language: "auto" | "ru" | "uk" | "en";
 	openaiApiKey: string;
 	openaiModel: string;
 	embeddingModel: string;
@@ -68,6 +69,7 @@ export interface DreamAnalyzerSettings {
 }
 
 export const DEFAULT_SETTINGS: DreamAnalyzerSettings = {
+	language: "auto",
 	openaiApiKey: "",
 	openaiModel: "gpt-5-mini",
 	embeddingModel: "text-embedding-3-small",
@@ -81,13 +83,13 @@ export const DEFAULT_SETTINGS: DreamAnalyzerSettings = {
 	autoUpdateEmbeddings: true
 };
 
-export const ENTITY_TYPES: { field: EntityCategory; folder: string; entity_type: string }[] = [
-	{ field: "characters", folder: "Персонажі", entity_type: "character" },
-	{ field: "places", folder: "Місця", entity_type: "place" },
-	{ field: "objects", folder: "Предмети", entity_type: "object" },
-	{ field: "emotions", folder: "Емоції", entity_type: "emotion" },
-	{ field: "symbols", folder: "Символи", entity_type: "symbol" },
-	{ field: "concepts", folder: "Концепти", entity_type: "concept" }
+export const ENTITY_TYPES: { field: EntityCategory; entity_type: string }[] = [
+	{ field: "characters", entity_type: "character" },
+	{ field: "places", entity_type: "place" },
+	{ field: "objects", entity_type: "object" },
+	{ field: "emotions", entity_type: "emotion" },
+	{ field: "symbols", entity_type: "symbol" },
+	{ field: "concepts", entity_type: "concept" }
 ];
 
 export interface DreamFrontmatter {

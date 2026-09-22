@@ -1,5 +1,6 @@
 import { App, requestUrl } from "obsidian";
 import { DreamAnalyzerSettings } from "./types";
+import { t } from "./i18n";
 
 interface OpenAiEmbeddingItem {
 	index: number;
@@ -24,7 +25,7 @@ export async function getOpenAiApiKey(app: App, settings: DreamAnalyzerSettings)
 	let key = (settings.openaiApiKey || "").trim();
 
 	if (!key) {
-		throw new Error("OpenAI API Key не вказано! Вкажіть його у налаштуваннях плагіна.");
+		throw new Error(t("apiKeyMissing"));
 	}
 
 	// 1. If key is already a direct OpenAI API Key starting with sk-, return directly
@@ -85,13 +86,14 @@ async function openAiRequest(
 	}
 
 	// 2. Fallback to Obsidian requestUrl
-	const res = await requestUrl({
+	const requestParams = {
 		url,
 		method: "POST",
 		headers,
 		body: bodyString,
 		throwOnError: false
-	});
+	} as Parameters<typeof requestUrl>[0] & { throwOnError: boolean };
+	const res = await requestUrl(requestParams);
 
 	return { status: res.status, text: res.text, json: res.json as unknown };
 }
@@ -113,7 +115,7 @@ export async function getEmbedding(apiKey: string, model: string, text: string):
 		return json.data[0].embedding;
 	}
 
-	throw new Error("Не вдалося отримати embedding від OpenAI");
+	throw new Error(t("embeddingMissing"));
 }
 
 export async function getBatchEmbeddings(apiKey: string, model: string, texts: string[]): Promise<number[][]> {
@@ -136,7 +138,7 @@ export async function getBatchEmbeddings(apiKey: string, model: string, texts: s
 		return sorted.map(item => item.embedding);
 	}
 
-	throw new Error("Не вдалося отримати batch embeddings від OpenAI");
+	throw new Error(t("batchEmbeddingsMissing"));
 }
 
 export async function requestChatCompletion(
@@ -177,8 +179,8 @@ export async function requestChatCompletion(
 		if (typeof parsed === "object" && parsed !== null) {
 			return parsed as Record<string, unknown>;
 		}
-		throw new Error("Отримано некоректний JSON від OpenAI");
+		throw new Error(t("invalidOpenAiJson"));
 	}
 
-	throw new Error("Не вдалося отримати відповідь від OpenAI Chat Completion");
+	throw new Error(t("chatResponseMissing"));
 }
