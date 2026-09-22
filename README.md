@@ -88,6 +88,10 @@ Provides:
 - Calendar integration
 - Date picker modal for creating historical dream entries
 
+### 🌐 Interface Languages
+
+Choose **Auto**, **Russian**, **Ukrainian**, or **English** in the plugin settings. The selected language is used for the interface and newly generated dream notes, dashboards, indexes, and folders. Existing localized folders are reused without being renamed.
+
 ---
 
 ### 🔄 Real-Time Synchronization
@@ -121,9 +125,10 @@ For live interactive tables in the Dashboard and Index pages, installing the [Da
 ## ⚙️ Configuration
 
 1. Open Obsidian **Settings** -> **Dream Analyzer**.
-2. Enter your **OpenAI API Key** (or save it securely via Obsidian SecretStorage).
-3. Select your preferred **AI Model** and **Embedding Model**.
-4. Set your base **Dreams Storage Folder** (defaults to `Dreams`).
+2. Select **Auto**, **Russian**, **Ukrainian**, or **English**.
+3. Enter your **OpenAI API Key** (or save it securely via Obsidian SecretStorage).
+4. Select your preferred **AI Model** and **Embedding Model**.
+5. Set your base **Dreams Storage Folder** (defaults to `Dreams`).
 
 ---
 
